@@ -60,9 +60,24 @@ pub const KCOV_MAX_ENTRIES: usize = 64 * 1024;
 #[unsafe(no_mangle)]
 static mut IN_KCOV_TRACE: u8 = 0;
 
-/// Fast bail-out: set to 1 when any thread enables KCOV. When 0,
-/// `kcov_trace_pc_impl` returns immediately, avoiding expensive
-/// task/thread lookups on every edge during boot.
+/// Safety gate: blocks the trace handler until a thread explicitly enables
+/// KCOV via the `KCOV_ENABLE` ioctl (which happens from userspace, long
+/// after boot).  Without this check, instrumented edges during early boot
+/// call `kcov_trace_pc_impl` → `ax_task::current()` before the scheduler
+/// has set the per-CPU task pointer (that happens at the end of
+/// `primary_init`, well after the first instrumented code runs).
+///
+/// `ax_task::current()` then panics with "current task is uninitialized".
+/// The panic handler tries `ax_println!`, but UART is not ready yet either:
+/// the platform init runs `init_trap` before `console::init_early`, so the
+/// UART `LazyInit` is still empty.  That is a double-panic, which rustc's
+/// abort guard turns into a `ud2` → #UD (unhandled) → #DF (unhandled) →
+/// triple fault → CPU reset → Seabios "Booting from ROM…" → boot again →
+/// same crash → infinite reset loop.
+///
+/// Setting this flag to 1 in `KCOV_ENABLE` is safe because by the time
+/// userspace can issue ioctls the boot is complete and all affected
+/// subsystems are live.
 #[used]
 static mut KCOV_ANY_ENABLED: u8 = 0;
 
