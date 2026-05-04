@@ -3,6 +3,8 @@ use core::{any::Any, task::Context};
 
 use ax_fs::CachedFile;
 use ax_memory_addr::PhysAddrRange;
+
+use crate::mm::SharedPages;
 use axfs_ng_vfs::{
     DeviceId, FileNodeOps, FilesystemOps, Metadata, MetadataUpdate, NodeFlags, NodeOps,
     NodePermission, NodeType, VfsError, VfsResult,
@@ -23,6 +25,8 @@ pub enum DeviceMmap {
     ReadOnly,
     /// Maps to a cached file.
     Cache(CachedFile),
+    /// Maps to a pre-allocated set of shared physical pages (kernel↔userspace).
+    SharedPages(Arc<SharedPages>),
 }
 
 /// Trait for device operations.

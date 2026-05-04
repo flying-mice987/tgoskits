@@ -256,6 +256,9 @@ pub fn sys_mmap(
                                 offset,
                                 &curr.as_thread().proc_data.aspace,
                             ),
+                            DeviceMmap::SharedPages(pages) => {
+                                Backend::new_shared(start, pages)
+                            }
                         }
                     }
                 }
