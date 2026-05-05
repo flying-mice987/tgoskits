@@ -54,10 +54,8 @@ pub const KCOV_MAX_ENTRIES: usize = 64 * 1024;
 /// Recursion guard: set to 1 while the trace handler runs so that
 /// instrumented code inside `kcov_trace_pc_impl` (and its callees)
 /// does not re-enter the tracer. Checked / set / cleared in the
-/// naked trampoline. `#[no_mangle]` ensures the naked asm and Rust
-/// code resolve to the same symbol.
+/// naked trampoline.
 #[used]
-#[unsafe(no_mangle)]
 static mut IN_KCOV_TRACE: u8 = 0;
 
 /// Safety gate: blocks the trace handler until a thread explicitly enables
@@ -190,7 +188,9 @@ impl DeviceOps for KcovDevice {
                 }
 
                 // Let the hot path know at least one thread is tracing.
-                unsafe { KCOV_ANY_ENABLED = 1; }
+                unsafe {
+                    KCOV_ANY_ENABLED = 1;
+                }
 
                 let task = ax_task::current();
                 let tid = task.id().as_u64() as u32;
