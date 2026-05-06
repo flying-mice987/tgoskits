@@ -17,8 +17,11 @@ use super::{SimpleFs, SimpleFsNode};
 /// Mmap behavior for devices.
 #[derive(Clone)]
 pub enum DeviceMmap {
-    /// The device is not mappable.
+    /// The device is not mappable (→ ENODEV, matches Linux).
     None,
+    /// The device supports mmap but is not yet configured
+    /// (→ EINVAL, matches Linux kcov semantics).
+    NotConfigured,
     /// Maps to a physical address range.
     Physical(PhysAddrRange),
     /// The device is read-only and will be mapped as CoW.

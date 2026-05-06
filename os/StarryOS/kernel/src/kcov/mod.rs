@@ -197,7 +197,7 @@ impl DeviceOps for KcovDevice {
 
                 let mut map = KCOV_STATE.per_thread.lock();
                 let rev = KCOV_STATE.tid_to_slot.lock();
-                let slot = rev.get(&tid).ok_or(VfsError::NoSuchDevice)?;
+                let slot = rev.get(&tid).ok_or(VfsError::InvalidInput)?;
                 let kcov_state = &mut map[*slot];
                 kcov_state.mode = mode;
 
@@ -210,10 +210,17 @@ impl DeviceOps for KcovDevice {
             }
 
             KCOV_DISABLE => {
+                // Stop recording but keep the buffer in the global map so
+                // mmap still works after disable (matching Linux kcov).
+                // Cleanup (disable_for_thread) is called only on thread exit.
                 let task = ax_task::current();
                 let tid = task.id().as_u64() as u32;
 
-                disable_for_thread(tid);
+                let mut map = KCOV_STATE.per_thread.lock();
+                let rev = KCOV_STATE.tid_to_slot.lock();
+                if let Some(&slot) = rev.get(&tid) {
+                    map[slot].mode = KCOV_MODE_DISABLED;
+                }
 
                 if let Some(thr) = task.try_as_thread() {
                     thr.set_kcov(None);
@@ -236,7 +243,7 @@ impl DeviceOps for KcovDevice {
             let state = &map[slot];
             DeviceMmap::SharedPages(state.buf_pages.clone())
         } else {
-            DeviceMmap::None
+            DeviceMmap::NotConfigured
         }
     }
 
@@ -270,11 +277,6 @@ pub unsafe extern "C" fn __sanitizer_cov_trace_pc() {
         "call {impl}",
         "pop rdi",
         "mov byte ptr [rip + {guard}], 0",
-        "cmp byte ptr [rip + {guard}], 0",
-        "je 2f",
-        "ud2",
-        "2:",
-        "ret",
         "1:",
         "ret",
         guard = sym IN_KCOV_TRACE,
@@ -297,11 +299,6 @@ pub unsafe extern "C" fn __sanitizer_cov_trace_pc() {
         "bl {impl}",
         "ldp x29, x30, [sp], #16",
         "strb wzr, [x16, #:lo12:{guard}]",
-        "ldrb w17, [x16, #:lo12:{guard}]",
-        "cbz w17, 2f",
-        "brk #0x2",
-        "2:",
-        "ret",
         "1:",
         "ret",
         guard = sym IN_KCOV_TRACE,
@@ -328,11 +325,6 @@ pub unsafe extern "C" fn __sanitizer_cov_trace_pc() {
         "ld ra, 0(sp)",
         "addi sp, sp, 16",
         "sb zero, 0(t0)",
-        "lb t1, 0(t0)",
-        "beqz t1, 2f",
-        "unimp",
-        "2:",
-        "ret",
         "1:",
         "ret",
         guard = sym IN_KCOV_TRACE,
@@ -359,11 +351,6 @@ pub unsafe extern "C" fn __sanitizer_cov_trace_pc() {
         "ld.d ra, sp, 0",
         "addi.d sp, sp, 16",
         "st.b zero, t0, 0",
-        "ld.b t1, t0, 0",
-        "beqz t1, 2f",
-        "break 0",
-        "2:",
-        "jirl zero, ra, 0",
         "1:",
         "jirl zero, ra, 0",
         guard = sym IN_KCOV_TRACE,

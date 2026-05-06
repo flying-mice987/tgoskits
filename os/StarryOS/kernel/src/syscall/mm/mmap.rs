@@ -201,6 +201,7 @@ pub fn sys_mmap(
                             );
                         }
                         DeviceMmap::None => return Err(AxError::NoSuchDevice),
+                        DeviceMmap::NotConfigured => return Err(AxError::InvalidInput),
                         _ => return Err(AxError::InvalidInput),
                     }
                 }
@@ -236,6 +237,9 @@ pub fn sys_mmap(
                         match device.mmap(offset as u64) {
                             DeviceMmap::None => {
                                 return Err(AxError::NoSuchDevice);
+                            }
+                            DeviceMmap::NotConfigured => {
+                                return Err(AxError::InvalidInput);
                             }
                             DeviceMmap::ReadOnly => {
                                 Backend::new_cow(start, page_size, backend, offset as u64, None)
